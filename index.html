@@ -1092,6 +1092,10 @@ function closeMenu() {
 // 初期描画
 renderMonster();
 updateItemUI();
+checkRebirth();
+
+// 5秒ごとに自動保存
+setInterval(saveState, 5000);
 </script>
 </body>
 </html>
