@@ -735,12 +735,42 @@ function releaseWakeLock() {
 function beginWalk() {
   walking = true;
   updateWalkUI(true);
-  window.addEventListener('devicemotion', onMotion);
   requestWakeLock();
   document.getElementById('stepBadge').className   = 'gps-badge gps-on';
   document.getElementById('stepBadge').textContent = '● 歩数計測中';
   addLog('散歩を開始しました！歩くとEXPが入ります', 'good');
   scheduleNextBattle();
+
+  // 3秒以内にセンサーの実データが来なければシミュレーションに切り替え
+  let motionDetected = false;
+  const motionCheck = (e) => {
+    const a = e.accelerationIncludingGravity;
+    if (a && a.x != null && (Math.abs(a.x) + Math.abs(a.y) + Math.abs(a.z)) > 0.1) {
+      motionDetected = true;
+    }
+  };
+  window.addEventListener('devicemotion', motionCheck);
+  window.addEventListener('devicemotion', onMotion);
+  setTimeout(() => {
+    window.removeEventListener('devicemotion', motionCheck);
+    if (!motionDetected && walking) {
+      addLog('センサー未検出 → シミュレーションに切り替えます', '');
+      window.removeEventListener('devicemotion', onMotion);
+      startSimulationOnly();
+    }
+  }, 3000);
+}
+
+function startSimulationOnly() {
+  document.getElementById('stepBadge').textContent = '● シミュ中';
+  simTimer = setInterval(() => {
+    if (!walking) return;
+    const steps = 60 + Math.floor(Math.random() * 10);
+    totalSteps  += steps;
+    totalDistKm  = totalSteps * 0.00075;
+    addExp(EXP_PER_BATCH);
+    updateWalkStats();
+  }, 10000);
 }
 
 function startSimulation() {
@@ -1093,6 +1123,14 @@ function closeMenu() {
 renderMonster();
 updateItemUI();
 checkRebirth();
+
+// 起動時ログ（セーブデータ確認用）
+const _saved = localStorage.getItem('gameState');
+if (_saved) {
+  addLog(`セーブデータ読込 Lv.${state.level} EXP:${state.exp}`, 'good');
+} else {
+  addLog('セーブデータなし（初回起動）', '');
+}
 
 // 5秒ごとに自動保存
 setInterval(saveState, 5000);
