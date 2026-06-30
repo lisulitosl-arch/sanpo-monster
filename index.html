@@ -640,13 +640,28 @@ function expToNext(lv) { return Math.floor(100 * Math.pow(1.4, lv - 1)); }
 // ============================================================
 // ゲーム状態
 // ============================================================
-const state = {
-  level: 1, exp: 0, hp: 50, maxHp: 50,
-  totalExpGained: 0, evolutionIndex: 0,
-  rebirthCount: 0,
-  statMods: { atk: 1.0, def: 1.0, spd: 1.0 },
-  items: parseInt(localStorage.getItem('itemCount') || '0'),
-};
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem('gameState') || '{}');
+    return {
+      level:          s.level          || 1,
+      exp:            s.exp            || 0,
+      hp:             s.hp             || 50,
+      maxHp:          s.maxHp          || 50,
+      totalExpGained: s.totalExpGained || 0,
+      evolutionIndex: s.evolutionIndex || 0,
+      rebirthCount:   s.rebirthCount   || 0,
+      statMods:       s.statMods       || { atk: 1.0, def: 1.0, spd: 1.0 },
+      items:          s.items          !== undefined ? s.items : parseInt(localStorage.getItem('itemCount') || '0'),
+    };
+  } catch(e) { return { level:1, exp:0, hp:50, maxHp:50, totalExpGained:0, evolutionIndex:0, rebirthCount:0, statMods:{atk:1.0,def:1.0,spd:1.0}, items:0 }; }
+}
+
+function saveState() {
+  localStorage.setItem('gameState', JSON.stringify(state));
+}
+
+const state = loadState();
 
 let walking = false;
 let totalDistKm = 0, totalSteps = 0;
@@ -776,6 +791,7 @@ function addExp(amount) {
     onLevelUp(); needed = expToNext(state.level);
   }
   renderMonster();
+  saveState();
 }
 
 function onLevelUp() {
@@ -860,6 +876,7 @@ function randomBattle() {
       : `「${enemy}」に敗北… HPが減った`;
     addLog(defeatMsg, '');
     renderMonster();
+    saveState();
   }
 }
 
@@ -870,14 +887,14 @@ function claimLoginBonus() {
   const today = new Date().toDateString();
   if (localStorage.getItem('lastBonus') === today) { addLog('ログインボーナスは今日もう受け取りました', ''); return; }
   localStorage.setItem('lastBonus', today);
-  state.items++; saveItems();
+  state.items++; saveItems(); saveState();
   addLog('ログインボーナス！ えさ を1個もらった！', 'good');
   updateItemUI(); closeMenu();
 }
 
 function feedMonster() {
   if (state.items <= 0) { addLog('えさがない！ 明日またログインしよう', ''); return; }
-  state.items--; saveItems();
+  state.items--; saveItems(); saveState();
   const heal = Math.floor(state.maxHp * 0.5);
   state.hp = Math.min(state.maxHp, state.hp + heal);
   addLog(`えさを使った！ HP +${heal}`, 'good');
@@ -978,6 +995,7 @@ function doRebirth() {
   addLog(`転生 ${state.rebirthCount}回目！ ATK${fmt(m.atk)} DEF${fmt(m.def)} SPD${fmt(m.spd)}`, 'evolve');
   showEvolveEffect(0, `転生 ${state.rebirthCount}回目`);
   renderMonster();
+  saveState();
 }
 
 function checkRebirth() {
@@ -991,6 +1009,7 @@ setInterval(() => {
   if (state.hp < state.maxHp) {
     state.hp = Math.min(state.maxHp, state.hp + Math.max(1, Math.floor(state.maxHp * 0.05)));
     renderMonster();
+    saveState();
   }
 }, 10000);
 
