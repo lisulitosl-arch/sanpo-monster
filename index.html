@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>散歩モンスター</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#a78bfa">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #1a1a2e;
+    color: #eee;
+    font-family: 'Segoe UI', sans-serif;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 12px env(safe-area-inset-bottom, 8px);
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  /* ── ヘッダー ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    flex-shrink: 0;
+    height: 36px;
+  }
+
+  h1 { font-size: 1.1rem; color: #a78bfa; letter-spacing: 2px; }
+
+  .menu-btn {
+    position: absolute;
+    right: 0;
+    background: #16213e;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 6px 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .menu-btn span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: #a78bfa;
+    border-radius: 2px;
+  }
+
+  .dropdown {
+    display: none;
+    position: fixed;
+    top: 50px;
+    right: 12px;
+    width: 210px;
+    background: #16213e;
+    border: 1px solid #a78bfa;
+    border-radius: 12px;
+    padding: 8px;
+    z-index: 200;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  }
+
+  .dropdown.open { display: block; }
+
+  .dropdown button {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 6px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+
+  .dropdown button:last-child { margin-bottom: 0; }
+  .btn-info { background: linear-gradient(135deg, #1e3a5f, #38bdf8); color: white; }
+
+  /* お知らせモーダル */
+  .notice-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 300;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .notice-overlay.open { display: flex; }
+
+  .notice-panel {
+    background: #16213e;
+    border: 1px solid #38bdf8;
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-width: 480px;
+    padding: 20px 16px 32px;
+    animation: slideup 0.25s ease;
+    max-height: 70dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  @keyframes slideup {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+
+  .notice-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .notice-header h2 {
+    font-size: 1rem;
+    color: #38bdf8;
+    letter-spacing: 1px;
+  }
+
+  .notice-close {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 0 4px;
+    flex: none;
+  }
+
+  .notice-list {
+    overflow-y: auto;
+    flex: 1;
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+  }
+
+  .notice-item {
+    border-bottom: 1px solid #1e293b;
+    padding: 10px 0;
+  }
+
+  .notice-item:last-child { border-bottom: none; }
+
+  .notice-date {
+    font-size: 0.65rem;
+    color: #475569;
+    margin-bottom: 3px;
+  }
+
+  .notice-title {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: #e2e8f0;
+    margin-bottom: 3px;
+  }
+
+  .notice-body {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+
+  .notice-tag {
+    display: inline-block;
+    font-size: 0.6rem;
+    padding: 1px 6px;
+    border-radius: 99px;
+    margin-right: 4px;
+    margin-bottom: 4px;
+  }
+  .tag-new    { background: #1d4ed8; color: #bfdbfe; }
+  .tag-update { background: #065f46; color: #6ee7b7; }
+  .tag-fix    { background: #7c2d12; color: #fed7aa; }
+
+  .menu-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 199;
+  }
+
+  .menu-overlay.open { display: block; }
+
+  /* ── モンスターカード（2カラム） ── */
+  .monster-card {
+    background: #16213e;
+    border: 2px solid #a78bfa;
+    border-radius: 16px;
+    padding: 12px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .monster-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  #monsterCanvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    animation: breathe 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 8px #a78bfa99);
+  }
+
+  .gps-badge {
+    font-size: 0.6rem;
+    padding: 2px 7px;
+    border-radius: 99px;
+    white-space: nowrap;
+  }
+
+  .gps-on  { background: #064e3b; color: #34d399; }
+  .gps-off { background: #1e293b; color: #64748b; }
+
+  .monster-right { flex: 1; min-width: 0; }
+
+  .monster-name {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #c4b5fd;
+    line-height: 1.2;
+  }
+
+  .monster-level {
+    font-size: 0.7rem;
+    color: #818cf8;
+    margin-bottom: 6px;
+  }
+
+  .bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: #94a3b8;
+    margin-bottom: 2px;
+  }
+
+  .bar-bg {
+    background: #0f172a;
+    border-radius: 6px;
+    height: 10px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.5s ease;
+  }
+
+  .exp-fill { background: linear-gradient(90deg, #818cf8, #a78bfa); }
+  .hp-fill  { background: linear-gradient(90deg, #34d399, #6ee7b7); }
+
+  .status-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+
+  .stat { text-align: center; }
+  .stat .val { font-size: 0.9rem; font-weight: bold; color: #f8fafc; }
+  .stat .lbl { font-size: 0.6rem; color: #64748b; }
+
+  .rebirth-badge-inline {
+    font-size: 0.6rem;
+    color: #f97316;
+    margin-top: 4px;
+    text-align: right;
+  }
+
+  /* ── バトルログ ── */
+  .battle-log {
+    background: #0a0f1e;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 6px 8px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: #1e293b transparent;
+  }
+
+  .log-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 2px 0;
+    border-bottom: 1px solid #0f172a;
+    font-size: 0.72rem;
+    line-height: 1.5;
+  }
+
+  .log-entry:last-child { border-bottom: none; }
+
+  .log-time {
+    color: #334155;
+    font-size: 0.62rem;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
+
+  .log-msg { color: #94a3b8; }
+  .log-entry.highlight .log-msg { color: #fde68a; font-weight: bold; }
+  .log-entry.good      .log-msg { color: #6ee7b7; }
+  .log-entry.evolve    .log-msg { color: #f0abfc; font-weight: bold; }
+
+  /* ── 散歩ステータス ── */
+  .walk-card {
+    background: #16213e;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .walk-stat .val {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #38bdf8;
+    display: block;
+    text-align: center;
+  }
+
+  .walk-stat .lbl {
+    font-size: 0.6rem;
+    color: #64748b;
+    display: block;
+    text-align: center;
+  }
+
+  /* ── ボタン ── */
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  button:active { transform: scale(0.97); }
+
+  .btn-start    { background: linear-gradient(135deg, #7c3aed, #a78bfa); color: white; }
+  .btn-stop     { background: linear-gradient(135deg, #dc2626, #f87171); color: white; }
+  .btn-disabled { background: #1e293b; color: #475569; cursor: not-allowed; }
+  .btn-feed     { background: linear-gradient(135deg, #065f46, #34d399); color: white; }
+  .btn-rebirth  { background: linear-gradient(135deg, #7c2d12, #f97316); color: white; border: 2px solid #fbbf24; }
+
+  /* ── 転生セクション ── */
+  #rebirthSection { display: none; flex-shrink: 0; }
+  #rebirthSection.visible { display: flex; gap: 8px; }
+
+  /* ── アニメーション ── */
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50%       { transform: scale(1.07); }
+  }
+
+  @keyframes levelup {
+    0%   { transform: scale(1);    filter: drop-shadow(0 0 8px #a78bfa99); }
+    30%  { transform: scale(1.35) rotate(-8deg); filter: drop-shadow(0 0 20px #fde68aee); }
+    60%  { transform: scale(1.35) rotate( 8deg); filter: drop-shadow(0 0 20px #fde68aee); }
+    100% { transform: scale(1);    filter: drop-shadow(0 0 8px #a78bfa99); }
+  }
+
+  #monsterCanvas.levelup-anim { animation: levelup 0.8s ease forwards; }
+
+  /* ── 進化エフェクト ── */
+  .evolve-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(167,139,250,0.15);
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .evolve-overlay.show { display: flex; animation: flashbg 1s ease; }
+
+  @keyframes flashbg {
+    0%, 100% { background: rgba(167,139,250,0.15); }
+    50%       { background: rgba(167,139,250,0.55); }
+  }
+
+  #evolveCanvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    animation: spinzoom 0.6s ease;
+  }
+
+  @keyframes spinzoom {
+    0%   { transform: scale(0) rotate(-180deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+
+  .evolve-text {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #f0abfc;
+    text-align: center;
+    text-shadow: 0 0 20px #f0abfc;
+  }
+
+  /* ── stat-mod ── */
+  .stat-mod { font-size: 0.55rem; font-weight: bold; margin-left: 2px; }
+  .stat-mod.up   { color: #34d399; }
+  .stat-mod.down { color: #f87171; }
+</style>
+</head>
+<body>
+
+<div class="menu-overlay" id="menuOverlay" onclick="closeMenu()"></div>
+
+<!-- ヘッダー -->
+<div class="header">
+  <h1>🌿 散歩モンスター</h1>
+  <button class="menu-btn" onclick="toggleMenu()">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="dropdown" id="dropdown">
+    <button class="btn-feed" id="btnBonus" onclick="claimLoginBonus()">🎁 ログインボーナス受取</button>
+    <button class="btn-feed" id="btnFeed" onclick="feedMonster()">🍖 えさを使う ×<span id="itemCount">0</span></button>
+    <button class="btn-info" onclick="openNotice()">📢 お知らせ</button>
+  </div>
+</div>
+
+<!-- 進化エフェクト -->
+<div class="evolve-overlay" id="evolveOverlay">
+  <canvas id="evolveCanvas" width="160" height="160"></canvas>
+  <div class="evolve-text" id="evolveText"></div>
+</div>
+
+<!-- モンスターカード（左：スプライト、右：ステータス） -->
+<div class="monster-card">
+  <div class="monster-left">
+    <canvas id="monsterCanvas"></canvas>
+    <span class="gps-badge gps-off" id="stepBadge">● 停止中</span>
+  </div>
+  <div class="monster-right">
+    <div class="monster-name" id="monsterName">タマゴ</div>
+    <div class="monster-level">Lv.<span id="monsterLv">1</span> &nbsp;|&nbsp; <span id="monsterStage">誕生前期</span></div>
+
+    <div class="bar-label"><span>EXP</span><span id="expText">0 / 100</span></div>
+    <div class="bar-bg"><div class="bar-fill exp-fill" id="expBar" style="width:0%"></div></div>
+
+    <div class="bar-label"><span>HP</span><span id="hpText">50 / 50</span></div>
+    <div class="bar-bg"><div class="bar-fill hp-fill" id="hpBar" style="width:100%"></div></div>
+
+    <div class="status-row">
+      <div class="stat">
+        <div class="val" id="statAtk">5<span class="stat-mod" id="modAtk"></span></div>
+        <div class="lbl">ATK</div>
+      </div>
+      <div class="stat">
+        <div class="val" id="statDef">3<span class="stat-mod" id="modDef"></span></div>
+        <div class="lbl">DEF</div>
+      </div>
+      <div class="stat">
+        <div class="val" id="statSpd">4<span class="stat-mod" id="modSpd"></span></div>
+        <div class="lbl">SPD</div>
+      </div>
+    </div>
+    <div class="rebirth-badge-inline" id="rebirthBadge"></div>
+  </div>
+</div>
+
+<!-- バトルログ -->
+<div class="battle-log" id="battleLog">
+  <div class="log-entry"><span class="log-time">--:--</span><span class="log-msg">散歩を始めるとモンスターが育ちます...</span></div>
+</div>
+
+<!-- 散歩ステータス -->
+<div class="walk-card">
+  <div class="walk-stat">
+    <span class="val" id="distVal">0.00</span>
+    <span class="lbl">距離(km)</span>
+  </div>
+  <div class="walk-stat">
+    <span class="val" id="stepsVal">0</span>
+    <span class="lbl">歩数</span>
+  </div>
+  <div class="walk-stat">
+    <span class="val" id="expGainedVal">0</span>
+    <span class="lbl">累計EXP</span>
+  </div>
+</div>
+
+<!-- 散歩ボタン -->
+<div class="btn-row">
+  <button class="btn-start" id="btnStart" onclick="startWalk()">🚶 散歩開始</button>
+  <button class="btn-stop btn-disabled" id="btnStop" onclick="stopWalk()" disabled>■ 終了</button>
+</div>
+
+<!-- お知らせモーダル -->
+<div class="notice-overlay" id="noticeOverlay" onclick="closeNotice()">
+  <div class="notice-panel" onclick="event.stopPropagation()">
+    <div class="notice-header">
+      <h2>📢 お知らせ</h2>
+      <button class="notice-close" onclick="closeNotice()">✕</button>
+    </div>
+    <div class="notice-list" id="noticeList"></div>
+  </div>
+</div>
+
+<!-- 転生セクション -->
+<div id="rebirthSection">
+  <button class="btn-rebirth" style="flex:1;padding:12px;" onclick="doRebirth()">⚡ 転生する</button>
+</div>
+
+<script>
+// ============================================================
+// ドット絵スプライト (16×16) B=黒 W=白 .=透明
+// ============================================================
+const PIXEL_SPRITES = [
+  ['......BBBB......','....BBWWWWBB....','...BWWWWWWWWB...','..BWWWWWWWWWWB..', '.BWWWWWWWWWWWWB.','.BWWWWWWWWWWWWB.','BWWWWWWWWWWWWWWB','BWWWWWWWWWWWWWWB','BWWWWWWWWWWWWWWB','.BWWWWWWWWWWWWB.','.BWWWWWWWWWWWWB.','..BWWWWWWWWWWB..','...BWWWWWWWWB...','....BBWWWWBB....','......BBBB......','................'],
+  ['................','.....BBBBBB.....','...BBWWWWWWBB...','..BWWWWWWWWWWB..', '.BWWBBWWWWBBWWB.','.BWWWWWWWWWWWWB.','.BWWWWWWWWWWWWB.','..BBWWWWWWWWBB..','....BBBBBBBB....','................','................','................','................','................','................','................'],
+  ['.....B....B.....', '.....BBBBBB.....','...BBWWWWWWBB...','..BWWWWWWWWWWB..', '.BWWBBWWWWBBWWB.','.BWWWWWWWWWWWWB.','.BWWWWWWWWWWWWB.','BWWWWWWWWWWWWWWB','BWWWWWWWWWWWWWWB','.BWWWWWWWWWWWWB.','..BBWWWWWWWWBB..','....BBBBBBBB....','................','................','................','................'],
+  ['................','.....BBBBB......','....BWWWWWB.....','....BWBBWWB.....','....BWWWWWBB....', '.....BWWWWWWB...','....BBWWWWWWB...','...BWWWWWWBB....','...BWWWWWBB.....','....BBWWBB......','......BB........','................','................','................','................','................'],
+  ['.B.......B......','BWB.....BWB.....','BWWB...BWWB.....', '.BWWBBBWWB......','...BWWWWWB......','...BWBBWWB......','...BWWWWWB......','..BBWWWWWBB.....', '.BWWWWWWWWWB....', '.BWWWWWWWWWB....','..BBWWWWWWBB....','....BB..BB......','.....B..B.......','................','................','................'],
+  ['....BBBBBBB.....','...BWBWBWBWB....','....BBBBBBB.....','B..BWWWWWWWB..B.','BB.BWWWWWWWB.BB.','.BBWWWWWWWWWWBB.','...BWWBBWWBBWB..','...BWWWWWWWWWB..','..BBWWWWWWWWWBB.','.BWWWWWWWWWWWWB.','..BBWWWWWWWWBB..','....BBBBBBBB....', '.....B....B.....','......B..B......','................','................'],
+];
+
+function drawSprite(canvas, idx, scale) {
+  const data = PIXEL_SPRITES[idx];
+  canvas.width  = 16 * scale;
+  canvas.height = 16 * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let r = 0; r < 16; r++) {
+    for (let c = 0; c < 16; c++) {
+      const ch = data[r][c];
+      if      (ch === 'B') ctx.fillStyle = '#111111';
+      else if (ch === 'W') ctx.fillStyle = '#f0f0f0';
+      else continue;
+      ctx.fillRect(c * scale, r * scale, scale, scale);
+    }
+  }
+}
+
+// ============================================================
+// モンスター定義
+// ============================================================
+const EVOLUTIONS = [
+  { minLv: 1,  name: 'タマゴ',      stage: '誕生前期', maxHp: 50,  atk: 5,  def: 3,  spd: 4,  canBattle: false },
+  { minLv: 3,  name: 'チビスライム', stage: '幼児期',   maxHp: 80,  atk: 9,  def: 6,  spd: 7,  canBattle: true  },
+  { minLv: 6,  name: 'ミドスライム', stage: '少年期',   maxHp: 130, atk: 15, def: 11, spd: 12, canBattle: true  },
+  { minLv: 10, name: 'ドラゴン幼体', stage: '青年期',   maxHp: 200, atk: 25, def: 18, spd: 20, canBattle: true  },
+  { minLv: 15, name: 'ドラゴン',    stage: '成熟期',   maxHp: 300, atk: 40, def: 28, spd: 32, canBattle: true  },
+  { minLv: 20, name: '竜王',        stage: '覚醒期',   maxHp: 450, atk: 60, def: 45, spd: 50, canBattle: true  },
+];
+
+function expToNext(lv) { return Math.floor(100 * Math.pow(1.4, lv - 1)); }
+
+// ============================================================
+// ゲーム状態
+// ============================================================
+const state = {
+  level: 1, exp: 0, hp: 50, maxHp: 50,
+  totalExpGained: 0, evolutionIndex: 0,
+  rebirthCount: 0,
+  statMods: { atk: 1.0, def: 1.0, spd: 1.0 },
+  items: parseInt(localStorage.getItem('itemCount') || '0'),
+};
+
+let walking = false;
+let totalDistKm = 0, totalSteps = 0;
+let battleTimer = null, simTimer = null;
+
+// 歩数検出用
+let onPeak = false;
+const STEP_THRESHOLD = 13;  // 感度（大きいほど鈍感）
+const EXP_PER_STEPS  = 10;  // N歩ごとにEXP付与
+const EXP_PER_BATCH  = 5;   // 1バッチのEXP
+let stepBuffer = 0;
+
+// ============================================================
+// 加速度センサー歩数カウント
+// ============================================================
+function onMotion(e) {
+  if (!walking) return;
+  const a = e.accelerationIncludingGravity;
+  if (!a || a.x == null) return;
+  const mag = Math.sqrt(a.x ** 2 + a.y ** 2 + a.z ** 2);
+
+  if (!onPeak && mag > STEP_THRESHOLD) {
+    onPeak = true;
+    totalSteps++;
+    totalDistKm = totalSteps * 0.00075; // 1歩≒0.75m
+    stepBuffer++;
+    if (stepBuffer >= EXP_PER_STEPS) {
+      stepBuffer = 0;
+      addExp(EXP_PER_BATCH);
+    }
+    updateWalkStats();
+  } else if (onPeak && mag < STEP_THRESHOLD - 3) {
+    onPeak = false;
+  }
+}
+
+function startWalk() {
+  if (walking) return;
+  if (typeof DeviceMotionEvent !== 'undefined' &&
+      typeof DeviceMotionEvent.requestPermission === 'function') {
+    // iOS 13以降：許可ダイアログ
+    DeviceMotionEvent.requestPermission()
+      .then(res => res === 'granted' ? beginWalk() : startSimulation())
+      .catch(() => startSimulation());
+  } else if (typeof DeviceMotionEvent !== 'undefined') {
+    // Android・その他
+    beginWalk();
+  } else {
+    // PCなどセンサーなし
+    startSimulation();
+  }
+}
+
+let wakeLock = null;
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    // タブ切り替えなどで解除された場合に再取得
+    wakeLock.addEventListener('release', () => {
+      if (walking) requestWakeLock();
+    });
+  } catch (e) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+
+function beginWalk() {
+  walking = true;
+  updateWalkUI(true);
+  window.addEventListener('devicemotion', onMotion);
+  requestWakeLock();
+  document.getElementById('stepBadge').className   = 'gps-badge gps-on';
+  document.getElementById('stepBadge').textContent = '● 歩数計測中';
+  addLog('散歩を開始しました！歩くとEXPが入ります', 'good');
+  scheduleNextBattle();
+}
+
+function startSimulation() {
+  walking = true;
+  updateWalkUI(true);
+  document.getElementById('stepBadge').className   = 'gps-badge gps-on';
+  document.getElementById('stepBadge').textContent = '● シミュ中';
+  addLog('シミュレーション: 10秒ごとに約65歩進みます', 'good');
+  simTimer = setInterval(() => {
+    const steps = 60 + Math.floor(Math.random() * 10);
+    totalSteps  += steps;
+    totalDistKm  = totalSteps * 0.00075;
+    addExp(EXP_PER_BATCH);
+    updateWalkStats();
+  }, 10000);
+  scheduleNextBattle();
+}
+
+function stopWalk() {
+  if (!walking) return;
+  walking = false;
+  window.removeEventListener('devicemotion', onMotion);
+  releaseWakeLock();
+  if (simTimer)    { clearInterval(simTimer);   simTimer = null; }
+  if (battleTimer) { clearTimeout(battleTimer); battleTimer = null; }
+  document.getElementById('stepBadge').className   = 'gps-badge gps-off';
+  document.getElementById('stepBadge').textContent = '● 停止中';
+  updateWalkUI(false);
+  addLog(`散歩終了！ ${totalSteps.toLocaleString()}歩 (${totalDistKm.toFixed(2)}km) 歩きました`, 'good');
+}
+
+function updateWalkUI(active) {
+  document.getElementById('btnStart').disabled  = active;
+  document.getElementById('btnStart').className = active ? 'btn-disabled' : 'btn-start';
+  document.getElementById('btnStop').disabled   = !active;
+  document.getElementById('btnStop').className  = active ? 'btn-stop' : 'btn-disabled';
+}
+
+// ============================================================
+// EXP & レベルアップ
+// ============================================================
+function addExp(amount) {
+  state.exp += amount; state.totalExpGained += amount;
+  addLog(`+${amount} EXP を獲得！`, 'good');
+  let needed = expToNext(state.level);
+  while (state.exp >= needed) {
+    state.exp -= needed; state.level++;
+    onLevelUp(); needed = expToNext(state.level);
+  }
+  renderMonster();
+}
+
+function onLevelUp() {
+  addLog(`レベルアップ！ Lv.${state.level} になった！`, 'highlight');
+  const c = document.getElementById('monsterCanvas');
+  c.classList.remove('levelup-anim'); void c.offsetWidth; c.classList.add('levelup-anim');
+  setTimeout(() => c.classList.remove('levelup-anim'), 800);
+  checkEvolution();
+}
+
+function checkEvolution() {
+  let ni = 0;
+  for (let i = EVOLUTIONS.length - 1; i >= 0; i--) { if (state.level >= EVOLUTIONS[i].minLv) { ni = i; break; } }
+  if (ni !== state.evolutionIndex) {
+    state.evolutionIndex = ni;
+    const evo = EVOLUTIONS[ni];
+    state.maxHp = evo.maxHp; state.hp = evo.maxHp;
+    showEvolveEffect(ni, evo.name);
+    addLog(`✨ ${evo.name} に進化した！`, 'evolve');
+  }
+  checkRebirth();
+}
+
+// ============================================================
+// バトル
+// ============================================================
+// 成長段階別の通常敵（インデックスはEVOLUTIONSと対応）
+const STAGE_ENEMIES = [
+  [],  // 誕生前期：戦闘なし
+  ['ネズミ','コウモリ','ナメクジ','芋虫','小石ゴーレム'],           // 幼児期
+  ['オオカミ','ゴブリン','スケルトン','毒トカゲ','山賊'],           // 少年期
+  ['オーク','ゾンビ騎士','ストーンゴーレム','フレイムバット','魔法使い'], // 青年期
+  ['リザードロード','ダークナイト','ワイバーン','ヴァンパイア','デーモン'], // 成熟期
+  ['魔王ガルガンチュア','煉獄将軍ディアブロ','深淵の番人アビス','混沌龍カオス','堕天使ルシフェル'], // 覚醒期（通常枠）
+];
+// 覚醒期のみ低確率で出る伝説級
+const ENEMIES_LEGEND = ['滅亡神バアル','虚無の皇帝カオスロード','終焉竜アポカリプス','星喰いリヴァイアサン','次元崩壊者ヴォイド','天地焦がす炎神イフリート','宇宙を統べる冥王ネクロス'];
+
+function scheduleNextBattle() {
+  if (!walking) return;
+  // 20〜50秒のランダム間隔
+  const delay = (20 + Math.floor(Math.random() * 31)) * 1000;
+  battleTimer = setTimeout(() => {
+    randomBattle();
+    scheduleNextBattle();
+  }, delay);
+}
+
+function randomBattle() {
+  if (!EVOLUTIONS[state.evolutionIndex].canBattle) return;
+  const evo      = EVOLUTIONS[state.evolutionIndex];
+  const isAwakened = state.evolutionIndex === EVOLUTIONS.length - 1;
+  // 覚醒期のみ5%で伝説級、それ以外は段階別プール
+  const awakened = isAwakened && Math.random() < 0.05;
+  const pool  = awakened ? ENEMIES_LEGEND : STAGE_ENEMIES[state.evolutionIndex];
+  const enemy = pool[Math.floor(Math.random() * pool.length)];
+  const atk      = Math.round(evo.atk * state.statMods.atk);
+  const def      = Math.round(evo.def * state.statMods.def);
+
+  // 覚醒期の敵はHPが桁違い
+  let eh = awakened
+    ? 500 + state.level * 300 + Math.floor(Math.random() * 500)
+    : 20 + state.level * 8;
+  let myHp = state.hp, rounds = 0;
+  while (eh > 0 && myHp > 0 && rounds < 20) {
+    eh   -= Math.max(1, atk + Math.floor(Math.random()*5) - 2);
+    if (eh > 0) myHp -= Math.max(0, 8 + Math.floor(Math.random()*6) - def);
+    rounds++;
+  }
+
+  if (eh <= 0) {
+    const gain = awakened
+      ? Math.floor((2000 + state.level * 500) * (0.9 + Math.random() * 0.4))
+      : Math.floor((30   + state.level * 12)  * (0.9 + Math.random() * 0.4));
+    state.hp = Math.max(1, myHp);
+    addLog(`「${enemy}」に勝利！ +${gain}EXP`, 'highlight');
+    addExp(gain);
+  } else {
+    state.hp = Math.max(1, Math.floor(state.hp * 0.6));
+    const defeatMsg = awakened
+      ? `「${enemy}」の力は次元を超えていた…`
+      : `「${enemy}」に敗北… HPが減った`;
+    addLog(defeatMsg, '');
+    renderMonster();
+  }
+}
+
+// ============================================================
+// ログインボーナス
+// ============================================================
+function claimLoginBonus() {
+  const today = new Date().toDateString();
+  if (localStorage.getItem('lastBonus') === today) { addLog('ログインボーナスは今日もう受け取りました', ''); return; }
+  localStorage.setItem('lastBonus', today);
+  state.items++; saveItems();
+  addLog('ログインボーナス！ えさ を1個もらった！', 'good');
+  updateItemUI(); closeMenu();
+}
+
+function feedMonster() {
+  if (state.items <= 0) { addLog('えさがない！ 明日またログインしよう', ''); return; }
+  state.items--; saveItems();
+  const heal = Math.floor(state.maxHp * 0.5);
+  state.hp = Math.min(state.maxHp, state.hp + heal);
+  addLog(`えさを使った！ HP +${heal}`, 'good');
+  renderMonster(); updateItemUI(); closeMenu();
+}
+
+function saveItems() { localStorage.setItem('itemCount', state.items); }
+
+function updateItemUI() {
+  const claimed = localStorage.getItem('lastBonus') === new Date().toDateString();
+  const btnB = document.getElementById('btnBonus');
+  btnB.disabled = claimed; btnB.className = claimed ? 'btn-disabled' : 'btn-feed';
+  btnB.textContent = claimed ? '🎁 受取済（明日またどうぞ）' : '🎁 ログインボーナス受取';
+  const btnF = document.getElementById('btnFeed');
+  btnF.disabled = state.items <= 0; btnF.className = state.items > 0 ? 'btn-feed' : 'btn-disabled';
+  document.getElementById('itemCount').textContent = state.items;
+}
+
+// ============================================================
+// 描画
+// ============================================================
+function renderMonster() {
+  const evo    = EVOLUTIONS[state.evolutionIndex];
+  const needed = expToNext(state.level);
+  drawSprite(document.getElementById('monsterCanvas'), state.evolutionIndex, 5);
+  document.getElementById('monsterName').textContent  = evo.name;
+  document.getElementById('monsterStage').textContent = evo.stage;
+  document.getElementById('monsterLv').textContent    = state.level;
+  document.getElementById('expBar').style.width  = Math.min(100, state.exp / needed * 100) + '%';
+  document.getElementById('expText').textContent = `${state.exp} / ${needed}`;
+  document.getElementById('hpBar').style.width   = Math.max(0, state.hp / state.maxHp * 100) + '%';
+  document.getElementById('hpText').textContent  = `${state.hp} / ${state.maxHp}`;
+
+  const cs = (base, mod) => Math.round(base * mod);
+  const ml = mod => { if (mod === 1.0) return ['','']; const p = Math.round((mod-1)*100); return p > 0 ? [`+${p}%`,'up'] : [`${p}%`,'down']; };
+
+  document.getElementById('statAtk').childNodes[0].nodeValue = cs(evo.atk, state.statMods.atk);
+  document.getElementById('statDef').childNodes[0].nodeValue = cs(evo.def, state.statMods.def);
+  document.getElementById('statSpd').childNodes[0].nodeValue = cs(evo.spd, state.statMods.spd);
+
+  ['Atk','Def','Spd'].forEach((k,i) => {
+    const [lbl,cls] = ml([state.statMods.atk, state.statMods.def, state.statMods.spd][i]);
+    const el = document.getElementById('mod'+k); el.textContent = lbl; el.className = `stat-mod ${cls}`;
+  });
+
+  document.getElementById('rebirthBadge').textContent = state.rebirthCount > 0 ? `転生 ${state.rebirthCount}回` : '';
+}
+
+function updateWalkStats() {
+  document.getElementById('distVal').textContent     = totalDistKm.toFixed(2);
+  document.getElementById('stepsVal').textContent    = totalSteps.toLocaleString();
+  document.getElementById('expGainedVal').textContent = state.totalExpGained;
+}
+
+// ============================================================
+// バトルログ
+// ============================================================
+function addLog(msg, cls = '') {
+  const log = document.getElementById('battleLog');
+  const el  = document.createElement('div');
+  el.className = 'log-entry ' + cls;
+  const now = new Date();
+  const t = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+  el.innerHTML = `<span class="log-time">${t}</span><span class="log-msg">${msg}</span>`;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ============================================================
+// 進化エフェクト
+// ============================================================
+function showEvolveEffect(idx, name) {
+  const ov = document.getElementById('evolveOverlay');
+  drawSprite(document.getElementById('evolveCanvas'), idx, 10);
+  document.getElementById('evolveText').textContent = `✨ ${name} に進化！`;
+  ov.classList.add('show');
+  setTimeout(() => ov.classList.remove('show'), 2800);
+  ov.onclick = () => ov.classList.remove('show');
+}
+
+// ============================================================
+// 転生
+// ============================================================
+function doRebirth() {
+  if (state.evolutionIndex < EVOLUTIONS.length - 1) return;
+  state.rebirthCount++;
+  const range = Math.min(0.5, 0.1 * state.rebirthCount);
+  state.statMods = {
+    atk: parseFloat((1 + (Math.random()*2-1)*range).toFixed(2)),
+    def: parseFloat((1 + (Math.random()*2-1)*range).toFixed(2)),
+    spd: parseFloat((1 + (Math.random()*2-1)*range).toFixed(2)),
+  };
+  state.level = 1; state.exp = 0; state.evolutionIndex = 0;
+  state.maxHp = EVOLUTIONS[0].maxHp; state.hp = state.maxHp;
+  document.getElementById('rebirthSection').classList.remove('visible');
+  const fmt = v => v >= 1 ? `+${Math.round((v-1)*100)}%` : `${Math.round((v-1)*100)}%`;
+  const m = state.statMods;
+  addLog(`転生 ${state.rebirthCount}回目！ ATK${fmt(m.atk)} DEF${fmt(m.def)} SPD${fmt(m.spd)}`, 'evolve');
+  showEvolveEffect(0, `転生 ${state.rebirthCount}回目`);
+  renderMonster();
+}
+
+function checkRebirth() {
+  document.getElementById('rebirthSection').classList.toggle('visible', state.evolutionIndex === EVOLUTIONS.length - 1);
+}
+
+// ============================================================
+// HP自動回復（10秒ごとに最大HPの5%）
+// ============================================================
+setInterval(() => {
+  if (state.hp < state.maxHp) {
+    state.hp = Math.min(state.maxHp, state.hp + Math.max(1, Math.floor(state.maxHp * 0.05)));
+    renderMonster();
+  }
+}, 10000);
+
+// ============================================================
+// お知らせ（ここを随時更新）
+// tag: 'new' | 'update' | 'fix'
+// ============================================================
+const NOTICES = [
+  {
+    date: '2026-06-30',
+    tag: 'new',
+    title: 'サービス開始！',
+    body: '散歩モンスターをリリースしました。毎日散歩してモンスターを育てよう！',
+  },
+  {
+    date: '2026-06-30',
+    tag: 'update',
+    title: '覚醒期の敵を追加',
+    body: 'Lv.20（竜王）になると伝説級の敵が低確率で出現するようになりました。',
+  },
+  {
+    date: '2026-06-30',
+    tag: 'update',
+    title: '転生システム実装',
+    body: '竜王到達後に転生が可能になりました。転生するたびにステータスが乱数で変化します。',
+  },
+];
+
+const TAG_LABELS = { new: 'NEW', update: 'UPDATE', fix: 'FIX' };
+
+function openNotice() {
+  closeMenu();
+  const list = document.getElementById('noticeList');
+  list.innerHTML = NOTICES.slice().reverse().map(n => `
+    <div class="notice-item">
+      <div class="notice-date">${n.date}</div>
+      <div><span class="notice-tag tag-${n.tag}">${TAG_LABELS[n.tag]}</span></div>
+      <div class="notice-title">${n.title}</div>
+      <div class="notice-body">${n.body}</div>
+    </div>
+  `).join('');
+  document.getElementById('noticeOverlay').classList.add('open');
+}
+
+function closeNotice() {
+  document.getElementById('noticeOverlay').classList.remove('open');
+}
+
+// ============================================================
+// メニュー
+// ============================================================
+function toggleMenu() {
+  const open = document.getElementById('dropdown').classList.toggle('open');
+  document.getElementById('menuOverlay').classList.toggle('open', open);
+}
+function closeMenu() {
+  document.getElementById('dropdown').classList.remove('open');
+  document.getElementById('menuOverlay').classList.remove('open');
+}
+
+// 初期描画
+renderMonster();
+updateItemUI();
+</script>
+</body>
+</html>
