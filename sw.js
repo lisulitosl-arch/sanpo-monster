@@ -1,4 +1,4 @@
-const CACHE = 'sanpo-monster-v1';
+const CACHE = 'sanpo-monster-v2';
 const FILES = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
